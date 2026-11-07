@@ -1,0 +1,97 @@
+name: CI and release
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.2'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+  image:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify stable version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: '[[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ghcr.io/zeraigr/media-knowledge-web:${{ github.ref_name }}
+          build-args: VERSION=${{ github.ref_name }}
+          labels: org.opencontainers.image.source=https://github.com/ZeraiGR/media-knowledge-web
+  deploy:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: image
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    steps:
+      - name: Deploy exact image to VPS
+        env:
+          DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ vars.VPS_USER }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+          PULL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          python3 -c 'import json,os; print(json.dumps({"digest":os.environ["DIGEST"],"token":os.environ["PULL_TOKEN"]}))' |
+            ssh -i ~/.ssh/deploy -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$USER@$HOST"
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [image, deploy]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Publish deployed version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          printf 'Container: ghcr.io/zeraigr/media-knowledge-web@%s\n' "$DIGEST" > release.md
+          gh release create "$TAG" --repo "$REPO" --title "$TAG" --notes-file release.md --verify-tag
