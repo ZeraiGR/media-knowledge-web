@@ -1,0 +1,3 @@
+- Small Vite/TypeScript viewer shell; product playback is future work. Canonical docs and deployment receiver live in sibling media-knowledge.
+- src/main.ts calls same-origin /api/readyz; Caddy proxies to api:8080. No media proxying.
+- Toolchain: `mem:tech_stack`; commands: `mem:suggested_commands`; deployment boundaries: `mem:conventions`; completion: `mem:task_completion`.

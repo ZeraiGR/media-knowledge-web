@@ -1,0 +1,3 @@
+- Production API uses same-origin /api; do not embed private VPS hostname in public source.
+- No media transfer through Caddy/API; browser playback must go directly to S3.
+- Tailscale is the current access boundary; no Funnel or public DNS deployment.

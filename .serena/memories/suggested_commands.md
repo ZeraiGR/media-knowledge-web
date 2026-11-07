@@ -1,0 +1,2 @@
+- npm ci; npm run build; npm run check; npm run dev (loopback only).
+- Stable vX.Y.Z tag builds image and deploys exact digest to VPS; main pushes only validate source.

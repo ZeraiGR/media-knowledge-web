@@ -1,0 +1,3 @@
+- npm ci; npm run build; npm audit --audit-level=high; review container and deployment readiness after relevant changes.
+- Update shared Media Knowledge docs, personal-docs reader copy and personal-context. Use standard closed portal publication.
+- PR descriptions omit testing reports. Memory links can be checked with `serena memories check`.

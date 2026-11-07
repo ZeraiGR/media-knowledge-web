@@ -1,0 +1,2 @@
+- Node 22.23.2, TypeScript, Vite; exact dependencies plus package-lock.json.
+- Caddy 2.11.4 container. Executable file capability removed because runtime drops all capabilities and listens on 8080.
